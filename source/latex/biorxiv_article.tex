@@ -1,0 +1,47 @@
+\documentclass[times,twoside,twocolumn]{zHenriquesLab-StyleBioRxiv}
+\urlstyle{same}
+\graphicspath{{gfx/}}
+
+
+% Please give the surname of the lead author for the running footer
+\leadauthor{Gori and Baez-Ortega} 
+
+\begin{document}
+
+\input{manuscript/title.tex}
+
+\input{manuscript/abstract.tex}
+
+\begin{keywords}
+\setlength{\parindent}{0pt}
+mutational signatures | cancer | Bayesian inference
+\end{keywords}
+
+\begin{corrauthor}
+{kcg25\at cam.ac.uk}
+\end{corrauthor}
+
+\input{manuscript/background}
+
+\input{manuscript/implementation}
+
+\input{manuscript/results}
+
+\input{manuscript/conclusion}
+
+\begingroup
+\footnotesize
+\subsection*{Conflict of interest}
+The authors declare no conflicts of interest.
+
+\subsection*{Acknowledgements}
+The authors would like to thank Maximilian Stammnitz for testing the software, and Daniel Gaffney for helpful suggestions and bug reports.
+\endgroup
+
+\section*{References}
+\bibliographystyle{zHenriquesLab-StyleBib} % Style BST file
+\bibliography{references.bib}
+
+\input{manuscript/figures}
+
+\end{document}

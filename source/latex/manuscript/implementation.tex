@@ -1,0 +1,88 @@
+\section*{Implementation}
+\subsection*{Overview}
+Developed as an open-source extension for the popular R programming language and environment, sigfit makes use of the Stan \citep{stanMain} statistical modelling platform and its interface package rstan (\url{http://mc-stan.org/rstan}) to carry out Bayesian inference on probabilistic mutational signature models. The package is publicly available on GitHub (\url{https://github.com/kgori/sigfit}), and can be installed directly from R using the devtools package \cite{devtools}. A detailed vignette is included in the package to illustrate its use.
+
+
+\subsection*{Bayesian statistical modelling}
+\label{ssec:bsm}
+Two types of statistical models of mutational signatures are implemented in sigfit. The first is equivalent to the mathematical formulation of the NMF approach that was introduced by the Wellcome Trust Sanger Institute Mutational Signature Framework \cite{AlexandrovCellRep2013} (hereafter referred to as WTSI-NMF) and has since been adopted by other tools \cite{Baez-Ortega2017}. Such a formulation interprets the observed mutational catalogues as an approximate linear combination of a collection of mutational signatures, with the signature exposures representing the mixing proportions. An equivalent statistical formulation can be defined by modelling the mutational signatures as the probability parameters of independent multinomial distributions, and treating the observed mutational catalogues as draws from a mixture of these distributions, with the signature exposures serving as mixture weights. For a general case with $G$ catalogues, $N$ signatures and $K$ mutation categories, the data and parameters in the model are as follows:
+
+\begin{indented}
+\setlength{\parindent}{0pt}
+
+$S_{N \times K}$ is the matrix of mutational signatures,
+
+$E_{G \times N}$ is the matrix of signature exposures,
+
+$M_{G \times K}$ is the matrix of observed mutational catalogues,
+
+$s_n = [s_{n1}, s_{n2}, \dots, s_{nK}]$ are the mutation probabilities in signature $n$ ($n$-th row of $S$),
+
+$e_g = [e_{g1}, e_{g2}, \dots, e_{gN}]$ are the signature exposures in catalogue $g$ ($g$-th row of $E$),
+
+$m_g = [m_{g1}, m_{g2}, \dots, m_{gK}]$ are the observed mutation counts in catalogue $g$ ($g$-th row of $M$).
+
+\end{indented}
+
+In a signature fitting model, the signatures matrix $S$ is fixed \textit{a priori} and the exposures matrix $E$ is inferred, whereas in a signature extraction model both $S$ and $E$ are inferred.
+
+To illustrate the NMF-inspired approach to inference implemented in sigfit, we first describe a generative process producing mutations in a set of mutational catalogues (\hyperref[figure1]{Fig. \ref*{figure1}A}). In this process, $N$ conditionally independent mutational signatures are sampled from a Dirichlet distribution parameterised by $\alpha$. For each catalogue, a set of exposures (which function as mixture weights) is sampled from a Dirichlet distribution parameterised by $\kappa$. For each of the $I$ mutations occurring in this catalogue, an indicator value $\theta$ is drawn from a categorical distribution, parameterised by $e_g$, to specify which of the signatures produces the current mutation. Finally, the form that the mutation takes is drawn from a categorical distribution parameterised by the indicated signature, $s_{\theta_{gi}}$. This process is repeated for all $I$ mutations in each of the $G$ catalogues.
+
+The inferential model is a simplification of the generative process. Since the assignment of individual mutations to specific signatures is not the aim of mutational signature analysis, considerable computational savings are achieved by marginalising out the assignment and only considering the sufficient statistics --- the counts of each mutation category per catalogue --- and modelling the likelihood of each catalogue $m_g$ via a multinomial distribution, the parameters of which, $P$ (with $p_g$ being the $g$-th row of $P$), are calculated as the matrix product of the exposures, $E$, and the mutational signatures, $S$ (\hyperref[figure1]{Fig. \ref*{figure1}B}). The model is formalised as follows:
+
+\begin{center}
+\onehalfspacing
+
+$m_g \sim \text{Multinomial}(p_g)$
+
+where $P = E\ S$
+% where $p_{gk} = \sum_{n=1}^N e_{gn} s_{nk}$
+
+$s_n \sim \text{Dirichlet}(\alpha_1, \alpha_2, \dots, \alpha_K) $
+
+$e_g \sim \text{Dirichlet}(\kappa_1, \kappa_2, \dots, \kappa_N)$
+
+%$g \in [1 .. G];\ n \in [1 .. N]$
+$g \in [1 \isep G];\ n \in [1 \isep N]$
+%$g \in \{1, \dots, G\};\ n \in \{1, \dots, N\}$ 
+\end{center}
+
+ This multinomial model by default imposes uninformative Dirichlet prior distributions on signatures and exposures. The hyperparameters of the Dirichlet priors, $\alpha_k$ and $\kappa_n$, are all by default assigned a value of 0.5, corresponding to Jeffrey's transformation-invariant prior \cite{Jeffreys1946}. However, users can make use of these parameters to specify custom prior distributions on signatures and exposures.
+
+In addition to the NMF-inspired Dirichlet–Multinomial model above, sigfit also offers a Bayesian interpretation of the Poisson model implemented in the EMu software \citep{Fischer2013}. This models the mutation counts in each category as draws from a Poisson distribution with expected value equal to the product of the mutational signatures, the degree of activity of each signature, and the opportunity for each mutation type across the relevant sequence (usually, the entire genome or exome). For the common case of 96 trinucleotide mutation types, such mutational opportunities correspond to the frequencies of the corresponding reference trinucleotides across the genome or exome. This allows the model to accommodate variability in the frequencies of trinucleotides among samples, such as that induced by copy number variation. For a case with with $G$ catalogues, $N$ signatures and $K$ mutation categories, this model is formalised as follows (\hyperref[figure1]{Fig. \ref*{figure1}C}):
+
+\begin{center}
+\onehalfspacing
+
+$m_{gk} \sim \text{Poisson}(p_{gk})$
+
+where $p_{gk} = o_{gk} \sum_{n=1}^N a_{gn} s_{nk}$
+
+$a_{gn} \sim \text{Half-Cauchy}(0, 1)$
+
+$s_n \sim \text{Dirichlet}(\alpha_1, \alpha_2, \dots, \alpha_K) $
+
+%$g \in 1, \dots, G;\ n \in 1, \dots, N;\ k \in 1, \dots, K$
+$g \in [1 \isep G];\ n \in [1 \isep N];\ k \in [1 \isep K]$
+%$g \in \{1, \dots, G\};\ n \in \{1, \dots, N\};\ k \in \{1, \dots, K\}$
+
+\end{center}
+
+Here, $m_{gk}$ is the observed number of mutations of type $k$ in catalogue $g$, $p_{gk}$ is the expected number of mutations of type $k$ in catalogue $g$, $s_{nk}$ is the mutation probability of mutation type $k$ in signature $n$, $a_{gn}$ is the activity of signature $n$ in catalogue $g$ (part of an activity matrix, $A_{G \times N}$), and $o_{gk}$ is the mutational opportunity of mutation type $k$ in catalogue $g$ (part of an opportunity matrix, $O_{G \times K}$). The matrix of signature activities in this Poisson model, $A$, plays an analogous role to the exposures, $E$, in the previous model, with the difference that signature activities are not constrained to sum to unity (but must still be non-negative), and hence are assigned an uninformative half-Cauchy prior distribution.
+
+One immediate advantage of this formulation is that the inferred mutational signatures are not contingent on the sequence composition of the genome under study (as this is captured by the mutational opportunities), and so the signatures are directly applicable to both genomes and exomes, and even across species \cite{Stammnitz2018}, as long as the relevant mutational opportunities are available. Furthermore, sigfit provides a function (‘convert\_signatures’) for converting mutational signatures between the opportunity-dependent Dirichlet–Multinomial formulation and the opportunity-independent Poisson formulation, allowing users to transition between models, or to adapt existing signatures to different sets of mutational opportunities.
+
+\subsection*{Basic usage}
+sigfit accepts input data as a table of mutations, from which mutational catalogues can be derived using the ‘build\_catalogues’ function, or directly as a matrix of catalogues. The mutation table must include at least four character fields: sample ID, bases of the reference and alternate alleles, and trinucleotide sequence context of each mutation. If mutations are located in transcribed genomic regions, an additional field can be used to indicate the transcriptional strand of each mutation. We note that the ‘build\_catalogues’ function can currently process only mutation data defined over the common 96 trinucleotide mutation types; for data following different categorisations, a matrix of catalogues must be directly provided.
+
+The main functionality of the package can be accessed via the functions ‘fit\_signatures’ (signature fitting), ‘extract\_signatures’ (signature extraction) and ‘fit\_extract\_signatures’ (simultaneous fitting and extraction with Fit-Ext models; see details below). These functions carry out Markov chain Monte Carlo (MCMC) sampling on the corresponding Bayesian models, described in the previous section. For signature fitting, a matrix of signatures must be provided, whereas for signature extraction, the number of signatures to extract must be specified. If a continuous range of signature numbers (e.g. 2–10) is specified for extraction, sigfit will extract signatures for each value in the range, and suggest the most likely true number of signatures. This is done heuristically, by finding the number of signatures which minimises the second derivative of the reconstruction accuracy function; the latter is defined, by default, as the cosine similarity between the original catalogues and the catalogues that have been reconstructed using the inferred signatures and exposures (two identical or parallel vectors have a cosine similarity of one, whereas two perpendicular vectors have a cosine similarity of zero).
+
+sigfit provides functions to plot mutational catalogues and signatures (‘plot\_spectrum’), signature exposures (‘plot\_exposures’) and spectrum reconstructions (‘plot\_reconstructions’). Moreover, all the relevant plots can be produced at once, directly from the output of the signature fitting and extraction functions, using the ‘plot\_all’ function (\hyperref[figure2]{Fig. \ref*{figure2}A–C}). The package also includes the set of 30 mutational signatures available in the COSMIC catalogue (\url{https://cancer.sanger.ac.uk/cosmic}), as well as several test data sets. The usage of the functions in sigfit is covered in detail in its associated vignette, which can be accessed through the ‘browseVignettes’ function, and in the R function documentation.
+
+\subsection*{Combined mutational signature fitting and extraction}
+In addition to models for conventional extraction and fitting of mutational signatures, sigfit implements a novel formulation that allows fitting of predefined signatures and extraction of undefined signatures within a single Bayesian inference process. This formulation, which we have dubbed Fit-Ext, can be understood as a generalisation of the fitting and extraction models described above, where the signatures matrix $S$ is composed of $N$ signatures known \textit{a priori} (modelled as data), and $M$ additional undefined signatures (modelled as parameters). Through Dirichlet–Multinomial and Poisson formulations analogous to the ones introduced above, the Fit-Ext models perform fitting of the $N$ fixed signatures and extraction of the $M$ parametric signatures simultaneously. The definition of static signatures entails a substantial dimensionality reduction, thus enhancing statistical power for deconvolution of any additional rare signatures that may be present in the mutational catalogues. 
+
+We consider the Fit-Ext models to be of use in two particular scenarios. The first of these involves the case where a small sample size precludes signature extraction (i.e. only signature fitting is feasible), yet there is qualitative evidence of the presence of one or more novel signatures (not featured in COSMIC or other repositories) in the data. By fitting the set of known mutational signatures and extracting one or more additional signatures from the data, the novel signatures can be inferred even from single mutational catalogues. The second scenario involves the identification of very rare or weak signatures in large cohorts, or in studies of differential mutagenesis (for instance, between primary tumours and their metastases). In these cases, even if signature extraction is applicable, very rare signatures may not be amenable to conventional signature extraction due to insufficient statistical support. In this scenario, provided that there is evidence of the presence of infrequent mutational patterns which cannot be captured by the signature extraction models, the Fit-Ext models may be used to re-fit the previously inferred signatures and extract the rare signatures. However, we note that such approach is likely to be appropriate only if there is strong information about the presence and number of rare signatures; otherwise, the signatures inferred by the Fit-Ext models will likely be composed of uninformative mutational noise.
+
+\subsection*{Extended mutational signature families}
+Recent genomic studies of cancer \cite{Nik-Zainal2016, Waszak2017, Li2017, Zou2018, Macintyre2017} have focused on mutational patterns beyond SNVs, defining mutational signatures over categories of indels, large structural variants and copy number alterations. Whereas some software packages for mutational signature analysis are limited to specific sets of mutation categories (commonly, the 96 SNV categories described above), sigfit can inherently infer signatures over any set of features of interest. Furthermore, the package is already prepared for the inference of transcriptional-strand-wise SNV signatures, which distinguish between the transcribed and untranscribed strands for mutations in transcribed genomic regions: if an input mutation table is provided with an additional column containing strand information, sigfit will automatically define 192 strand-wise SNV categories, infer strand-wise signatures and adapt its plotting functions correspondingly (strand-wise test data sets are also provided). If a set of mutational catalogues is given with a number of mutation categories other than 96 or 192, sigfit will infer signatures using the categories provided. This flexibility makes the package suitable for identification of signatures over a range of unorthodox mutation categories, or even for entirely unrelated signal deconvolution problems.
